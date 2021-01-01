@@ -3,7 +3,7 @@
  * 
  * MIT License
  * 
- * Copyright (c) 2019-2020 Blinking
+ * Copyright (c) 2019-2021 Blinking
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
