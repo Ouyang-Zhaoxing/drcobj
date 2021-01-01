@@ -82,7 +82,13 @@ THREE.DrcobjLoader = (function () {
       self.dracoLoader.decodeDracoFile(geometryBuffer, function (geometry) {
         jsonData.geometries[i].data = geometry.toJSON().data; ++finishCount;
         if (onDecodeProgress) { onDecodeProgress(finishCount / jsonData.geometries.length * 100); }
-        if (finishCount === jsonData.geometries.length) { onLoad(self.objectLoader.parse(jsonData)); }
+        if (finishCount === jsonData.geometries.length) {
+
+          if (onLoad) { // 通常情况下 OnLoad 是必须存在的
+            onLoad(self.objectLoader.parse(jsonData));
+          }
+
+        }
       });
 
     }
