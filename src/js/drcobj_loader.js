@@ -73,6 +73,8 @@ THREE.DrcobjLoader = (function () {
     var geometryBufferStart, geometryBufferEnd, geometryBuffer, finishCount = 0;
     var geometriesDataOffset = 4 + modelDataSize;
 
+    for (var i = 0; i < jsonData.geometries.length; i++) { decode(i); }
+
     function decode(i) {
 
       geometryBufferStart = geometriesDataOffset + jsonData.geometries[i].data.offset;
@@ -80,20 +82,82 @@ THREE.DrcobjLoader = (function () {
       geometryBuffer = buffer.slice(geometryBufferStart, geometryBufferEnd);
 
       self.dracoLoader.decodeDracoFile(geometryBuffer, function (geometry) {
-        jsonData.geometries[i].data = geometry.toJSON().data; ++finishCount;
-        if (onDecodeProgress) { onDecodeProgress(finishCount / jsonData.geometries.length * 100); }
-        if (finishCount === jsonData.geometries.length) {
 
-          if (onLoad) { // 通常情况下 OnLoad 是必须存在的
-            onLoad(self.objectLoader.parse(jsonData));
-          }
+        geometry.uuid = jsonData.geometries[i].uuid;
 
+        if (jsonData.geometries[i].name !== undefined) {
+          geometry.name = jsonData.geometries[i].name;
         }
+
+        if (jsonData.geometries[i].userData !== undefined) {
+          geometry.userData = jsonData.geometries[i].userData;
+        }
+
+        jsonData.geometries[geometry.uuid] = geometry;
+
+        ++finishCount;
+
+        if (onDecodeProgress) {
+          onDecodeProgress(finishCount / jsonData.geometries.length * 100);
+        }
+
+        if (finishCount === jsonData.geometries.length) {
+          if (onLoad) { parseJSON(jsonData, onLoad); }
+        }
+
       });
 
     }
 
-    for (var i = 0; i < jsonData.geometries.length; i++) { decode(i); }
+    // 内置3D对象JSON解析代码 并修改其中网格解析部分 避免多余的解析
+    // https://github.com/mrdoob/three.js/blob/master/src/loaders/ObjectLoader.js
+
+    function parseJSON(json, onLoad) {
+
+      // const animations = self.objectLoader.parseAnimations(json.animations);
+      // const shapes = self.objectLoader.parseShapes(json.shapes);
+      // const geometries = self.objectLoader.parseGeometries(json.geometries, shapes);
+
+      const geometries = json.geometries; // 直接忽略不处理
+
+      const images = self.objectLoader.parseImages(json.images, function () {
+
+        if (onLoad !== undefined) onLoad(object);
+
+      });
+
+      const textures = self.objectLoader.parseTextures(json.textures, images);
+      const materials = self.objectLoader.parseMaterials(json.materials, textures);
+
+      const object = self.objectLoader.parseObject(json.object, geometries, materials, undefined);
+      // const skeletons = self.objectLoader.parseSkeletons(json.skeletons, object);
+
+      // self.objectLoader.bindSkeletons(object, skeletons);
+
+      //
+
+      if (onLoad !== undefined) {
+
+        let hasImages = false;
+
+        for (const uuid in images) {
+
+          if (images[uuid] instanceof HTMLImageElement) {
+
+            hasImages = true;
+            break;
+
+          }
+
+        }
+
+        if (hasImages === false) onLoad(object);
+
+      }
+
+      return object;
+
+    }
 
   };
 
