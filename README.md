@@ -11,6 +11,10 @@ You can use **drcobj_exporter.js** to convert a threejs-object (.json) file to a
 
 ---
 
+## New Version!
+
+**Compared with version 1.0.3.2, version 1.1.0 reduces model loading time by more than 50%!**
+
 ## Model file size comparison
 
 **Test Model:** ./example/bunny.json
