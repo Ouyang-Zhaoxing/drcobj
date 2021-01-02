@@ -35,7 +35,7 @@ THREE.DrcobjLoader = (function () {
   DrcobjLoader.prototype.setResourcePath = function (value) { this.resourcePath = value; };
   DrcobjLoader.prototype.setDecoderPath = function (value) { this.decoderPath = value; };
 
-  DrcobjLoader.prototype.load = function (url, onLoad, onProgress, onDecodeProgress, onError) {
+  DrcobjLoader.prototype.load = function (url, onLoad, onProgress, onDecodeProgress, onError, isInflate) {
 
     var self = this;
 
@@ -46,7 +46,7 @@ THREE.DrcobjLoader = (function () {
     fileLoader.setPath(self.path);
     fileLoader.setResponseType("arraybuffer");
 
-    fileLoader.load(url, function (buffer) { self.parse(buffer, onLoad, onDecodeProgress); }, onProgress, onError);
+    fileLoader.load(url, function (buffer) { self.parse(buffer, onLoad, onDecodeProgress, isInflate); }, onProgress, onError);
 
   };
 
