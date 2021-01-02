@@ -1,7 +1,3 @@
-/**
- * @author Don McCurdy / https://www.donmccurdy.com
- */
-
 THREE.DRACOLoader = function ( manager ) {
 
 	THREE.Loader.call( this, manager );
@@ -20,15 +16,13 @@ THREE.DRACOLoader = function ( manager ) {
 		position: 'POSITION',
 		normal: 'NORMAL',
 		color: 'COLOR',
-		uv: 'TEX_COORD',
-		uv2: 'TEX_COORD',
+		uv: 'TEX_COORD'
 	};
 	this.defaultAttributeTypes = {
 		position: 'Float32Array',
 		normal: 'Float32Array',
 		color: 'Float32Array',
-		uv: 'Float32Array',
-		uv2: 'Float32Array'
+		uv: 'Float32Array'
 	};
 
 };
@@ -88,12 +82,8 @@ THREE.DRACOLoader.prototype = Object.assign( Object.create( THREE.Loader.prototy
 
 		loader.setPath( this.path );
 		loader.setResponseType( 'arraybuffer' );
-
-		if ( this.crossOrigin === 'use-credentials' ) {
-
-			loader.setWithCredentials( true );
-
-		}
+		loader.setRequestHeader( this.requestHeader );
+		loader.setWithCredentials( this.withCredentials );
 
 		loader.load( url, ( buffer ) => {
 
@@ -199,8 +189,10 @@ THREE.DRACOLoader.prototype = Object.assign( Object.create( THREE.Loader.prototy
 			.then( ( message ) => this._createGeometry( message.geometry ) );
 
 		// Remove task from the task list.
+		// Note: replaced '.finally()' with '.catch().then()' block - iOS 11 support (#19416)
 		geometryPending
-			.finally( () => {
+			.catch( () => true )
+			.then( () => {
 
 				if ( worker && taskID ) {
 
@@ -254,6 +246,7 @@ THREE.DRACOLoader.prototype = Object.assign( Object.create( THREE.Loader.prototy
 		var loader = new THREE.FileLoader( this.manager );
 		loader.setPath( this.decoderPath );
 		loader.setResponseType( responseType );
+		loader.setWithCredentials( this.withCredentials );
 
 		return new Promise( ( resolve, reject ) => {
 
@@ -428,7 +421,7 @@ THREE.DRACOLoader.DRACOWorker = function () {
 
 					};
 
-					DracoDecoderModule( decoderConfig );
+					DracoDecoderModule( decoderConfig ); // eslint-disable-line no-undef
 
 				} );
 				break;
@@ -541,16 +534,7 @@ THREE.DRACOLoader.DRACOWorker = function () {
 		// Add index.
 		if ( geometryType === draco.TRIANGULAR_MESH ) {
 
-			// Generate mesh faces.
-			var numFaces = dracoGeometry.num_faces();
-			var numIndices = numFaces * 3;
-			var dataSize = numIndices * 4;
-			var ptr = draco._malloc( dataSize );
-			decoder.GetTrianglesUInt32Array( dracoGeometry, dataSize, ptr );
-			var index = new Uint32Array( draco.HEAPU32.buffer, ptr, numIndices ).slice();
-			draco._free( ptr );
-
-			geometry.index = { array: index, itemSize: 1 };
+			geometry.index = decodeIndex( draco, decoder, dracoGeometry );
 
 		}
 
@@ -560,80 +544,55 @@ THREE.DRACOLoader.DRACOWorker = function () {
 
 	}
 
+	function decodeIndex( draco, decoder, dracoGeometry ) {
+
+		var numFaces = dracoGeometry.num_faces();
+		var numIndices = numFaces * 3;
+		var byteLength = numIndices * 4;
+
+		var ptr = draco._malloc( byteLength );
+		decoder.GetTrianglesUInt32Array( dracoGeometry, byteLength, ptr );
+		var index = new Uint32Array( draco.HEAPF32.buffer, ptr, numIndices ).slice();
+		draco._free( ptr );
+
+		return { array: index, itemSize: 1 };
+
+	}
+
 	function decodeAttribute( draco, decoder, dracoGeometry, attributeName, attributeType, attribute ) {
 
 		var numComponents = attribute.num_components();
 		var numPoints = dracoGeometry.num_points();
 		var numValues = numPoints * numComponents;
-		var dracoArray;
-		var ptr;
-		var array;
+		var byteLength = numValues * attributeType.BYTES_PER_ELEMENT;
+		var dataType = getDracoDataType( draco, attributeType );
 
-		switch ( attributeType ) {
-
-			case Float32Array:
-				var dataSize = numValues * 4;
-				ptr = draco._malloc( dataSize );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_FLOAT32, dataSize, ptr );
-				array = new Float32Array( draco.HEAPF32.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			case Int8Array:
-				ptr = draco._malloc( numValues );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_INT8, numValues, ptr );
-				geometryBuffer[ attributeName ] = new Int8Array( draco.HEAP8.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			case Int16Array:
-				var dataSize = numValues * 2;
-				ptr = draco._malloc( dataSize );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_INT16, dataSize, ptr );
-				array = new Int16Array( draco.HEAP16.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			case Int32Array:
-				var dataSize = numValues * 4;
-				ptr = draco._malloc( dataSize );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_INT32, dataSize, ptr );
-				array = new Int32Array( draco.HEAP32.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			case Uint8Array:
-				ptr = draco._malloc( numValues );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_UINT8, numValues, ptr );
-				geometryBuffer[ attributeName ] = new Uint8Array( draco.HEAPU8.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			case Uint16Array:
-				var dataSize = numValues * 2;
-				ptr = draco._malloc( dataSize );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_UINT16, dataSize, ptr );
-				array = new Uint16Array( draco.HEAPU16.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			case Uint32Array:
-				var dataSize = numValues * 4;
-				ptr = draco._malloc( dataSize );
-				decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, draco.DT_UINT32, dataSize, ptr );
-				array = new Uint32Array( draco.HEAPU32.buffer, ptr, numValues ).slice();
-				draco._free( ptr );
-				break;
-
-			default:
-				throw new Error( 'THREE.DRACOLoader: Unexpected attribute type.' );
-                }
+		var ptr = draco._malloc( byteLength );
+		decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, dataType, byteLength, ptr );
+		var array = new attributeType( draco.HEAPF32.buffer, ptr, numValues ).slice();
+		draco._free( ptr );
 
 		return {
 			name: attributeName,
 			array: array,
 			itemSize: numComponents
 		};
+
+	}
+
+	function getDracoDataType( draco, attributeType ) {
+
+		switch ( attributeType ) {
+
+			case Float32Array: return draco.DT_FLOAT32;
+			case Int8Array: return draco.DT_INT8;
+			case Int16Array: return draco.DT_INT16;
+			case Int32Array: return draco.DT_INT32;
+			case Uint8Array: return draco.DT_UINT8;
+			case Uint16Array: return draco.DT_UINT16;
+			case Uint32Array: return draco.DT_UINT32;
+
+		}
 
 	}
 
